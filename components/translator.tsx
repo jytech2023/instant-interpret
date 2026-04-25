@@ -83,12 +83,16 @@ export function Translator({ initialLang }: { initialLang: LangCode }) {
   }, [autoSpeak]);
 
   useEffect(() => {
-    const stored = localStorage.getItem("instant-interpret:autoSpeak");
+    localStorage.removeItem("instant-interpret:autoSpeak");
+    const stored = localStorage.getItem("instant-interpret:autoSpeak:v2");
     if (stored !== null) setAutoSpeak(stored === "1");
   }, []);
 
   useEffect(() => {
-    localStorage.setItem("instant-interpret:autoSpeak", autoSpeak ? "1" : "0");
+    localStorage.setItem(
+      "instant-interpret:autoSpeak:v2",
+      autoSpeak ? "1" : "0",
+    );
   }, [autoSpeak]);
 
   const translate = useCallback(

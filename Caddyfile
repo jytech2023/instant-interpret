@@ -1,0 +1,15 @@
+{
+	auto_https off
+	admin off
+}
+
+https://localhost:8443 {
+	tls ./certs/localhost.pem ./certs/localhost-key.pem
+	log {
+		output stdout
+		level INFO
+	}
+	reverse_proxy 127.0.0.1:3000 {
+		flush_interval -1
+	}
+}

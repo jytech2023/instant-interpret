@@ -28,19 +28,16 @@
     "ttsDisable": "关闭译文朗读"
   },
   "usage": {
-    "used30d": "近 30 天用量",
+    "usage": "用量",
     "remaining": "剩余",
-    "usedFreeTier": "已用（免费层）",
-    "scopeMissing": "key 权限不足",
-    "noKey": "未配置",
-    "ok": "正常"
+    "usedFreeTier": "已用"
   },
   "errors": {
     "micDenied": "需要麦克风权限",
     "translateFailed": "翻译失败"
   },
   "footer": {
-    "poweredBy": "由 Deepgram Nova-3 · Vercel AI Gateway 驱动",
+    "copyrights": "© 2026 JY Tech LLC",
     "switchLang": "English"
   },
   "languages": {

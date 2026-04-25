@@ -40,9 +40,8 @@ export function useDeepgramLive({ onUtterance }: Options) {
 
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
-  const audioControllerRef =
-    useRef<ReadableStreamDefaultController<Uint8Array> | null>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
+  const sessionIdRef = useRef<string | null>(null);
 
   const onUtteranceRef = useRef(onUtterance);
   useEffect(() => {
@@ -58,14 +57,16 @@ export function useDeepgramLive({ onUtterance }: Options) {
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
 
-    try {
-      audioControllerRef.current?.close();
-    } catch {}
-    audioControllerRef.current = null;
+    eventSourceRef.current?.close();
+    eventSourceRef.current = null;
 
-    abortRef.current?.abort();
-    abortRef.current = null;
-
+    const sid = sessionIdRef.current;
+    if (sid) {
+      fetch(`/api/listen/end?id=${sid}`, { method: "POST", keepalive: true }).catch(
+        () => {},
+      );
+      sessionIdRef.current = null;
+    }
     setInterim("");
     setStatus("idle");
   }, []);
@@ -107,96 +108,71 @@ export function useDeepgramLive({ onUtterance }: Options) {
     setStatus("connecting");
 
     try {
+      // 1. mic
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true },
       });
       streamRef.current = stream;
 
+      // 2. session
+      const sid =
+        crypto.randomUUID?.() ??
+        `s_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      sessionIdRef.current = sid;
+
+      const startRes = await fetch("/api/listen/start", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: sid }),
+      });
+      if (!startRes.ok) {
+        throw new Error(`session_start_${startRes.status}`);
+      }
+
+      // 3. SSE downstream
+      await new Promise<void>((resolve, reject) => {
+        const es = new EventSource(`/api/listen/events?id=${sid}`);
+        eventSourceRef.current = es;
+        let opened = false;
+        es.addEventListener("ready", () => {
+          opened = true;
+          resolve();
+        });
+        es.onmessage = (e) => {
+          try {
+            handleMessage(JSON.parse(e.data) as DeepgramMessage);
+          } catch {}
+        };
+        es.addEventListener("error", () => {
+          if (!opened) reject(new Error("sse_open_failed"));
+        });
+        // failsafe: resolve after 1.5s if ready event missed
+        setTimeout(() => {
+          if (!opened) {
+            opened = true;
+            resolve();
+          }
+        }, 1500);
+      });
+
+      // 4. recorder → POST audio chunks
       const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
         ? "audio/webm;codecs=opus"
         : "audio/webm";
-
-      const audioStream = new ReadableStream<Uint8Array>({
-        start(controller) {
-          audioControllerRef.current = controller;
-        },
-      });
-
       const recorder = new MediaRecorder(stream, { mimeType });
       recorderRef.current = recorder;
-      recorder.ondataavailable = async (e) => {
+      recorder.ondataavailable = (e) => {
         if (e.data.size === 0) return;
-        try {
-          const buf = await e.data.arrayBuffer();
-          audioControllerRef.current?.enqueue(new Uint8Array(buf));
-        } catch {}
+        if (sessionIdRef.current !== sid) return;
+        fetch(`/api/listen/audio?id=${sid}`, {
+          method: "POST",
+          body: e.data,
+          headers: { "content-type": "application/octet-stream" },
+        }).catch(() => {});
       };
-      recorder.onstop = () => {
-        try {
-          audioControllerRef.current?.close();
-        } catch {}
-      };
-
-      const ctrl = new AbortController();
-      abortRef.current = ctrl;
-
-      const fetchInit: RequestInit & { duplex?: "half" } = {
-        method: "POST",
-        body: audioStream,
-        duplex: "half",
-        signal: ctrl.signal,
-        headers: { "content-type": "audio/webm" },
-      };
-
       recorder.start(250);
 
-      const res = await fetch("/api/listen", fetchInit);
-      if (!res.ok || !res.body) {
-        throw new Error(`listen_failed_${res.status}`);
-      }
-
       setStatus("listening");
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buf = "";
-      (async () => {
-        try {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buf += decoder.decode(value, { stream: true });
-            const chunks = buf.split("\n\n");
-            buf = chunks.pop() ?? "";
-            for (const chunk of chunks) {
-              const lines = chunk.split("\n");
-              let isError = false;
-              let dataStr = "";
-              for (const line of lines) {
-                if (line.startsWith("event: error")) isError = true;
-                else if (line.startsWith("event: ready")) continue;
-                else if (line.startsWith("data: ")) dataStr += line.slice(6);
-              }
-              if (!dataStr) continue;
-              try {
-                const parsed = JSON.parse(dataStr);
-                if (isError) {
-                  setError(parsed.message ?? "deepgram_error");
-                  setStatus("error");
-                  stop();
-                  return;
-                }
-                handleMessage(parsed as DeepgramMessage);
-              } catch {}
-            }
-          }
-        } catch (err) {
-          if ((err as Error).name === "AbortError") return;
-          console.error("read error", err);
-        } finally {
-          setStatus((s) => (s === "error" ? s : "idle"));
-        }
-      })();
     } catch (err) {
       console.error("start failed", err);
       const msg = (err as Error).message ?? "start_failed";

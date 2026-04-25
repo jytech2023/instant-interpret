@@ -34,7 +34,7 @@ export default async function HomePage({
 
       <footer className="px-4 py-2 flex flex-col items-center gap-1 text-[10px] text-neutral-500 border-t border-neutral-200 bg-white">
         <UsageIndicator />
-        <span>{tFooter("poweredBy")}</span>
+        <span>{tFooter("copyrights")}</span>
       </footer>
     </div>
   );

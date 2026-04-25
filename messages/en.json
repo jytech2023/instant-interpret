@@ -28,19 +28,16 @@
     "ttsDisable": "Disable spoken playback"
   },
   "usage": {
-    "used30d": "used (30d)",
+    "usage": "Usage",
     "remaining": "remaining",
-    "usedFreeTier": "used (free tier)",
-    "scopeMissing": "scope missing",
-    "noKey": "no key",
-    "ok": "ok"
+    "usedFreeTier": "used"
   },
   "errors": {
     "micDenied": "Microphone access is required.",
     "translateFailed": "translation failed"
   },
   "footer": {
-    "poweredBy": "Powered by Deepgram Nova-3 · Vercel AI Gateway",
+    "copyrights": "© 2026 JY Tech LLC",
     "switchLang": "中文"
   },
   "languages": {
