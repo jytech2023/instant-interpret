@@ -1,0 +1,63 @@
+{
+  "meta": {
+    "title": "Instant Interpret — Real-time Multi-speaker Voice Translation",
+    "description": "Live simultaneous interpretation with automatic speaker diarization and language detection."
+  },
+  "header": {
+    "brand": "Instant Interpret",
+    "tagline": "Real-time multi-speaker voice translation"
+  },
+  "panel": {
+    "tapToStart": "Tap mic to start listening",
+    "tapToSpeak": "Tap the mic and start talking. Speakers and languages are detected automatically.",
+    "connecting": "Connecting…",
+    "listening": "Listening · speak naturally",
+    "stop": "Stop",
+    "start": "Start",
+    "translating": "Translating…",
+    "speak": "Replay",
+    "clear": "Clear conversation",
+    "speaker": "Speaker",
+    "original": "Original",
+    "translation": "Translation"
+  },
+  "settings": {
+    "translateTo": "Translate to",
+    "targetHint": "Target language. The source language is auto-detected from your speech.",
+    "ttsEnable": "Enable spoken playback (free, browser-native)",
+    "ttsDisable": "Disable spoken playback"
+  },
+  "usage": {
+    "used30d": "used (30d)",
+    "remaining": "remaining",
+    "usedFreeTier": "used (free tier)",
+    "scopeMissing": "scope missing",
+    "noKey": "no key",
+    "ok": "ok"
+  },
+  "errors": {
+    "micDenied": "Microphone access is required.",
+    "translateFailed": "translation failed"
+  },
+  "footer": {
+    "poweredBy": "Powered by Deepgram Nova-3 · Vercel AI Gateway",
+    "switchLang": "中文"
+  },
+  "languages": {
+    "en": "English",
+    "zh": "中文 (简体)",
+    "zh-TW": "中文 (繁體)",
+    "ja": "日本語",
+    "ko": "한국어",
+    "fr": "Français",
+    "de": "Deutsch",
+    "es": "Español",
+    "ru": "Русский",
+    "ar": "العربية",
+    "pt": "Português",
+    "it": "Italiano",
+    "th": "ไทย",
+    "vi": "Tiếng Việt",
+    "hi": "हिन्दी"
+  }
+}

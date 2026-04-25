@@ -1,0 +1,63 @@
+{
+  "meta": {
+    "title": "即时同传 — 多人实时语音翻译",
+    "description": "实时同声传译，自动识别说话人和语种"
+  },
+  "header": {
+    "brand": "即时同传",
+    "tagline": "多人实时语音翻译"
+  },
+  "panel": {
+    "tapToStart": "点击麦克风开始聆听",
+    "tapToSpeak": "点击麦克风后自然说话，自动识别说话人和语种",
+    "connecting": "连接中…",
+    "listening": "聆听中 · 自然说话即可",
+    "stop": "停止",
+    "start": "开始",
+    "translating": "翻译中…",
+    "speak": "重听",
+    "clear": "清空对话",
+    "speaker": "说话人",
+    "original": "原文",
+    "translation": "译文"
+  },
+  "settings": {
+    "translateTo": "翻译为",
+    "targetHint": "目标翻译语言。源语言根据语音自动识别",
+    "ttsEnable": "开启译文朗读（浏览器内置，免费）",
+    "ttsDisable": "关闭译文朗读"
+  },
+  "usage": {
+    "used30d": "近 30 天用量",
+    "remaining": "剩余",
+    "usedFreeTier": "已用（免费层）",
+    "scopeMissing": "key 权限不足",
+    "noKey": "未配置",
+    "ok": "正常"
+  },
+  "errors": {
+    "micDenied": "需要麦克风权限",
+    "translateFailed": "翻译失败"
+  },
+  "footer": {
+    "poweredBy": "由 Deepgram Nova-3 · Vercel AI Gateway 驱动",
+    "switchLang": "English"
+  },
+  "languages": {
+    "en": "English",
+    "zh": "中文（简体）",
+    "zh-TW": "中文（繁體）",
+    "ja": "日本語",
+    "ko": "한국어",
+    "fr": "Français",
+    "de": "Deutsch",
+    "es": "Español",
+    "ru": "Русский",
+    "ar": "العربية",
+    "pt": "Português",
+    "it": "Italiano",
+    "th": "ไทย",
+    "vi": "Tiếng Việt",
+    "hi": "हिन्दी"
+  }
+}
