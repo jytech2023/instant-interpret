@@ -4,8 +4,7 @@ export const dynamic = "force-dynamic";
 type DGUsageScope = "ok" | "missing" | "no_key";
 type DGUsage = {
   scope: DGUsageScope;
-  hours?: number;
-  amount_usd?: number;
+  balance_usd?: number;
 };
 
 type ORCredits =
@@ -27,27 +26,22 @@ async function deepgramUsage(): Promise<DGUsage> {
     const pid = projData.projects?.[0]?.project_id;
     if (!pid) return { scope: "missing" };
 
-    // Last 30 days usage
-    const end = new Date().toISOString().slice(0, 10);
-    const start = new Date(Date.now() - 30 * 86400_000)
-      .toISOString()
-      .slice(0, 10);
-    const usageRes = await fetch(
-      `https://api.deepgram.com/v1/projects/${pid}/usage?start=${start}&end=${end}`,
+    const balRes = await fetch(
+      `https://api.deepgram.com/v1/projects/${pid}/balances`,
       {
         headers: { Authorization: `Token ${key}` },
         cache: "no-store",
       },
     );
-    if (!usageRes.ok) return { scope: "missing" };
-    const usage = (await usageRes.json()) as {
-      results?: { hours?: number; amount?: number };
+    if (!balRes.ok) return { scope: "missing" };
+    const data = (await balRes.json()) as {
+      balances?: Array<{ amount?: number; units?: string }>;
     };
-    return {
-      scope: "ok",
-      hours: usage.results?.hours,
-      amount_usd: usage.results?.amount,
-    };
+    const totalUsd =
+      data.balances
+        ?.filter((b) => (b.units ?? "").toLowerCase() === "usd")
+        .reduce((sum, b) => sum + (b.amount ?? 0), 0) ?? 0;
+    return { scope: "ok", balance_usd: totalUsd };
   } catch {
     return { scope: "missing" };
   }
