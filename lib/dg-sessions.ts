@@ -1,85 +1,74 @@
 import "server-only";
 import { DeepgramClient } from "@deepgram/sdk";
+import { createClient, type RedisClientType } from "redis";
 
-type Controller = ReadableStreamDefaultController<Uint8Array>;
 type V1Socket = Awaited<ReturnType<DeepgramClient["listen"]["v1"]["connect"]>>;
 
-export type Session = {
-  id: string;
-  socket: V1Socket;
-  controller: Controller | null;
-  ready: boolean;
-  closed: boolean;
-  pendingMessages: string[];
-  lastSeen: number;
-};
+const audioChannel = (id: string) => `dg:audio:${id}`;
+const endChannel = (id: string) => `dg:end:${id}`;
 
 type Globals = {
-  __dgSessions?: Map<string, Session>;
-  __dgGcStarted?: boolean;
+  __dgRedisPub?: RedisClientType;
+};
+const g = globalThis as unknown as Globals;
+
+async function getPublisher(): Promise<RedisClientType | null> {
+  const url = process.env.REDIS_URL;
+  if (!url) return null;
+  if (g.__dgRedisPub && g.__dgRedisPub.isOpen) return g.__dgRedisPub;
+  const client: RedisClientType = createClient({ url });
+  client.on("error", (err) => console.error("redis pub error", err));
+  await client.connect();
+  g.__dgRedisPub = client;
+  return client;
+}
+
+export async function publishAudio(
+  id: string,
+  buf: ArrayBuffer,
+): Promise<boolean> {
+  const pub = await getPublisher();
+  if (!pub) return false;
+  await pub.publish(audioChannel(id), Buffer.from(buf) as unknown as string);
+  return true;
+}
+
+export async function publishEnd(id: string): Promise<boolean> {
+  const pub = await getPublisher();
+  if (!pub) return false;
+  await pub.publish(endChannel(id), "1");
+  return true;
+}
+
+export type SsePipe = {
+  enqueue: (chunk: string) => void;
+  close: () => void;
+  setOnClientAbort: (cb: () => void) => void;
 };
 
-const g = globalThis as unknown as Globals;
-const sessions: Map<string, Session> = (g.__dgSessions ??= new Map());
-
-const SESSION_TTL_MS = 5 * 60 * 1000;
-
-if (!g.__dgGcStarted) {
-  g.__dgGcStarted = true;
-  setInterval(() => {
-    const now = Date.now();
-    for (const [id, s] of sessions) {
-      if (now - s.lastSeen > SESSION_TTL_MS) {
-        try {
-          s.socket.close();
-        } catch {}
-        try {
-          s.controller?.close();
-        } catch {}
-        sessions.delete(id);
-      }
-    }
-  }, 60_000).unref?.();
-}
-
-export function getSession(id: string): Session | undefined {
-  const s = sessions.get(id);
-  if (s) s.lastSeen = Date.now();
-  return s;
-}
-
-export function deleteSession(id: string): void {
-  const s = sessions.get(id);
-  if (!s) return;
-  s.closed = true;
-  try {
-    s.socket.close();
-  } catch {}
-  try {
-    s.controller?.close();
-  } catch {}
-  sessions.delete(id);
-}
-
-const encoder = new TextEncoder();
-
-function emit(session: Session, payload: string): void {
-  if (session.closed) return;
-  if (!session.controller) {
-    session.pendingMessages.push(payload);
+export async function runTranscriptionSession(
+  id: string,
+  pipe: SsePipe,
+): Promise<void> {
+  const apiKey = process.env.DEEPGRAM_API_KEY;
+  const redisUrl = process.env.REDIS_URL;
+  if (!apiKey) {
+    pipe.enqueue(
+      `event: error\ndata: ${JSON.stringify({ message: "no_dg_key" })}\n\n`,
+    );
+    pipe.close();
     return;
   }
-  try {
-    session.controller.enqueue(encoder.encode(payload));
-  } catch {}
-}
-
-export async function createSession(id: string): Promise<Session> {
-  const apiKey = process.env.DEEPGRAM_API_KEY;
-  if (!apiKey) throw new Error("DEEPGRAM_API_KEY not set");
+  if (!redisUrl) {
+    pipe.enqueue(
+      `event: error\ndata: ${JSON.stringify({ message: "no_redis" })}\n\n`,
+    );
+    pipe.close();
+    return;
+  }
 
   const dg = new DeepgramClient({ apiKey });
-  const socket = await dg.listen.v1.connect({
+  const socket: V1Socket = await dg.listen.v1.connect({
     Authorization: `Token ${apiKey}`,
     model: "nova-3",
     language: "multi",
@@ -92,64 +81,66 @@ export async function createSession(id: string): Promise<Session> {
     vad_events: "true",
   });
 
-  const session: Session = {
-    id,
-    socket,
-    controller: null,
-    ready: false,
-    closed: false,
-    pendingMessages: [],
-    lastSeen: Date.now(),
+  // Dedicated subscriber connection (Redis pub/sub requires its own connection)
+  const sub: RedisClientType = createClient({ url: redisUrl });
+  sub.on("error", (err) => console.error("redis sub error", err));
+
+  let cleanedUp = false;
+  const cleanup = async () => {
+    if (cleanedUp) return;
+    cleanedUp = true;
+    try {
+      socket.close();
+    } catch {}
+    try {
+      await sub.unsubscribe();
+    } catch {}
+    try {
+      await sub.disconnect();
+    } catch {}
+    pipe.close();
   };
-  sessions.set(id, session);
 
   socket.on("message", (data) => {
-    emit(session, `data: ${JSON.stringify(data)}\n\n`);
+    pipe.enqueue(`data: ${JSON.stringify(data)}\n\n`);
   });
   socket.on("error", (err) => {
-    emit(
-      session,
+    pipe.enqueue(
       `event: error\ndata: ${JSON.stringify({ message: err.message })}\n\n`,
     );
   });
   socket.on("close", () => {
-    deleteSession(id);
+    cleanup();
   });
 
   socket.connect();
   try {
     await socket.waitForOpen();
-    session.ready = true;
-    emit(session, `event: ready\ndata: {}\n\n`);
-  } catch (err) {
-    deleteSession(id);
-    throw err;
-  }
-  return session;
-}
-
-export function attachController(id: string, controller: Controller): boolean {
-  const s = sessions.get(id);
-  if (!s) return false;
-  s.controller = controller;
-  s.lastSeen = Date.now();
-  for (const msg of s.pendingMessages) {
-    try {
-      controller.enqueue(encoder.encode(msg));
-    } catch {}
-  }
-  s.pendingMessages = [];
-  return true;
-}
-
-export function sendAudio(id: string, buf: ArrayBuffer): boolean {
-  const s = sessions.get(id);
-  if (!s || s.closed) return false;
-  try {
-    s.socket.sendMedia(buf);
-    s.lastSeen = Date.now();
-    return true;
   } catch {
-    return false;
+    pipe.enqueue(
+      `event: error\ndata: ${JSON.stringify({ message: "deepgram_open_failed" })}\n\n`,
+    );
+    await cleanup();
+    return;
   }
+
+  await sub.connect();
+  // Subscribe in binary mode so we get Buffer, not utf-8 string (audio is binary)
+  await sub.subscribe(
+    audioChannel(id),
+    (message: Buffer | string) => {
+      const buf =
+        typeof message === "string" ? Buffer.from(message, "binary") : message;
+      try {
+        socket.sendMedia(buf);
+      } catch {}
+    },
+    true,
+  );
+  await sub.subscribe(endChannel(id), () => {
+    cleanup();
+  });
+
+  pipe.enqueue(`event: ready\ndata: {}\n\n`);
+  pipe.setOnClientAbort(cleanup);
 }

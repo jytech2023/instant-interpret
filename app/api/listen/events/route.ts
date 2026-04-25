@@ -1,4 +1,4 @@
-import { attachController, deleteSession, getSession } from "@/lib/dg-sessions";
+import { runTranscriptionSession } from "@/lib/dg-sessions";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -8,23 +8,40 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const id = url.searchParams.get("id");
   if (!id) return new Response("id required", { status: 400 });
-  if (!getSession(id)) return new Response("no_session", { status: 404 });
+
+  const encoder = new TextEncoder();
+  let abortHandler: (() => void) | null = null;
 
   const stream = new ReadableStream<Uint8Array>({
-    start(controller) {
-      const ok = attachController(id, controller);
-      if (!ok) {
+    async start(controller) {
+      let closed = false;
+      const safeEnqueue = (chunk: string) => {
+        if (closed) return;
+        try {
+          controller.enqueue(encoder.encode(chunk));
+        } catch {}
+      };
+      const safeClose = () => {
+        if (closed) return;
+        closed = true;
         try {
           controller.close();
         } catch {}
-        return;
-      }
+      };
       req.signal.addEventListener("abort", () => {
-        deleteSession(id);
+        if (abortHandler) abortHandler();
+        safeClose();
+      });
+      await runTranscriptionSession(id, {
+        enqueue: safeEnqueue,
+        close: safeClose,
+        setOnClientAbort: (cb) => {
+          abortHandler = cb;
+        },
       });
     },
     cancel() {
-      deleteSession(id);
+      if (abortHandler) abortHandler();
     },
   });
 

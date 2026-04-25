@@ -1,8 +1,8 @@
-import { createSession } from "@/lib/dg-sessions";
-
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+// Session state lives entirely in the SSE handler; /start is a no-op
+// kept so the existing client flow doesn't need to change.
 export async function POST(req: Request) {
   let id: string;
   try {
@@ -14,15 +14,5 @@ export async function POST(req: Request) {
   if (!id || id.length < 8) {
     return Response.json({ error: "id_required" }, { status: 400 });
   }
-
-  try {
-    await createSession(id);
-    return Response.json({ ok: true });
-  } catch (err) {
-    console.error("createSession failed", err);
-    return Response.json(
-      { error: "deepgram_open_failed" },
-      { status: 502 },
-    );
-  }
+  return Response.json({ ok: true });
 }

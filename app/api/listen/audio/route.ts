@@ -1,4 +1,4 @@
-import { sendAudio } from "@/lib/dg-sessions";
+import { publishAudio } from "@/lib/dg-sessions";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,6 +12,6 @@ export async function POST(req: Request) {
   if (buf.byteLength === 0) {
     return new Response(null, { status: 204 });
   }
-  const ok = sendAudio(id, buf);
+  const ok = await publishAudio(id, buf);
   return new Response(null, { status: ok ? 204 : 410 });
 }
