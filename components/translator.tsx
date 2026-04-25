@@ -68,7 +68,7 @@ export function Translator({ initialLang }: { initialLang: LangCode }) {
   const t = useTranslations();
   const [targetLang, setTargetLang] = useState<LangCode>(initialLang);
   const [entries, setEntries] = useState<Entry[]>([]);
-  const [autoSpeak, setAutoSpeak] = useState<boolean>(true);
+  const [autoSpeak, setAutoSpeak] = useState<boolean>(false);
   const tts = useTTS();
   const feedRef = useRef<HTMLDivElement>(null);
   const targetLangRef = useRef(targetLang);
